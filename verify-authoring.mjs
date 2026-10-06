@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {realpath,rm} from 'node:fs/promises';
+import * as T from 'three';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+
+const {build}=createRequire(await realpath(new URL('../node_modules/wrangler/package.json',import.meta.url)))('esbuild');
+const out=new URL('../.sites-runtime/authoring-check.mjs',import.meta.url).pathname;
+await build({stdin:{contents:['state','avatar','robot','pose','rig','authoring','characters','pads','performance-state','loader'].map(p=>`export * from "./lib/engine/${p}.ts";`).join('\n')+'\nexport {default as CreationStudio} from "./components/creation-studio.tsx";\nexport {default as PadComposer} from "./components/pad-composer.tsx";\nexport {default as Studio} from "./components/studio.tsx";',resolveDir:process.cwd(),loader:'tsx'},bundle:true,format:'esm',platform:'node',packages:'external',outfile:out});
+const E=await import(out),root=E.createAvatar(),binding=new E.PoseBinding(root),finger=binding.bones.find(b=>b.name==='LeftIndexIntermediate'),arm=binding.bones.find(b=>b.name==='LeftUpperArm');
+const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-4,`${a} != ${b}`),noop=()=>{};
+try{
+ const config=E.defaults(),look={...config,robot:{...config.robot,armLength:1.7,handWidth:1.4,headScale:1.3}};
+ new E.RobotRig(root).shape(look);binding.setAppearanceReference();
+ arm.node.rotateZ(.7);finger.node.rotateX(.8);const frame=binding.capture();
+ const captured=E.savePose(config.performance,binding.model,frame,'  Mi saludo  ');let p=captured.value;
+ assert.equal(p.poses[0].name,'Mi saludo');assert.equal(p.mode,'pose');assert.equal(p.weight,1);
+ frame.bones[finger.key].q[0]=0;assert.notDeepEqual(p.poses[0].frame,frame,'saved capture owns its frame');
+ binding.apply(E.emptyFrame());const player=new E.PosePlayer(binding);player.update({...E.previewAsset(p,captured.asset,binding.model),blend:0,keepFace:false},0,false);
+ near(finger.node.quaternion.angleTo(finger.rest.q),.8);near(arm.node.quaternion.angleTo(arm.rest.q),.7);near(root.getObjectByName('LeftHand').scale.x,1.4);
+ const initial=binding.capture(),created=E.createAnimation(p,binding.model,initial,'Mi intro');p=created.value;
+ assert.equal(created.clip.keyframes[0].time,0);assert.equal(p.playing,false);
+ arm.node.rotateZ(.6);finger.node.rotateX(.4);const nextFrame=binding.capture(),appended=E.appendPosition(p,created.clip,nextFrame,1);p=appended.value;
+ assert.equal(appended.clip.keyframes.length,2);assert.equal(appended.key.time,1);assert.equal(appended.clip.duration,1);
+ binding.apply(E.sampleClip(appended.clip,.5));near(arm.node.quaternion.angleTo(arm.rest.q),1);near(finger.node.quaternion.angleTo(finger.rest.q),1);
+ const extended=E.appendPosition(p,appended.clip,initial,.5);p=extended.value;assert.equal(extended.key.time,1.5);assert.equal(extended.clip.keyframes.length,3);
+ const bankBefore=structuredClone(p.pads),assigned=E.assignAssetPad(p,{kind:'clip',id:extended.clip.id},binding.model);p=assigned.value;
+ assert.equal(assigned.pad.bank,'C');assert.equal(assigned.pad.slot,0);assert.equal(assigned.pad.action.loop,false);assert.deepEqual(p.pads.filter(p=>p.bank==='A'),bankBefore);
+ const repeated=E.assignAssetPad(p,{kind:'clip',id:extended.clip.id},binding.model);assert.equal(repeated.pad.id,assigned.pad.id);assert.equal(repeated.value.pads.length,p.pads.length,'one click never creates duplicate pads');
+ const stage={model:binding.model,animations:[],camera:()=>config.camera,frame:noop,burst:noop,clearPower:noop},runtime=new E.PadRuntime();
+ const played=runtime.press({...config,performance:p},assigned.pad,stage);assert.equal(played.performance.mode,'clip');assert.equal(played.performance.playing,true);assert.equal(played.performance.time,0);
+ binding.apply(E.emptyFrame());player.update({...played.performance,blend:0,keepFace:false},.5,false);near(finger.node.quaternion.angleTo(finger.rest.q),1);
+ const full={...p,pads:['A','B','C'].flatMap(bank=>Array.from({length:12},(_,slot)=>({...assigned.pad,id:crypto.randomUUID(),bank,slot,action:{mode:'HYPE'}})))};
+ assert.throws(()=>E.assignAssetPad(full,captured.asset,binding.model),/llenos/);assert.equal(full.pads.length,36);assert.throws(()=>E.previewAsset(p,captured.asset,'wrong-rig'));assert.throws(()=>E.assignAssetPad(p,captured.asset,'wrong-rig'));assert.throws(()=>E.savePose(p,'wrong-rig',initial,'Wrong',undefined,captured.asset.id));assert.throws(()=>E.appendPosition(p,extended.clip,initial,300));
+ const profile=E.captureCharacter({...look,performance:p},'Mi robot custom',null,1.5),library=E.storeCharacter({...look,performance:p},profile),restored=E.activateCharacter(E.parseConfig(JSON.parse(JSON.stringify(library))),profile,binding.model);
+ assert.equal(restored.robot.armLength,1.7);assert.equal(restored.robot.handWidth,1.4);assert.equal(restored.performance.poses[0].character,profile.id);assert.equal(restored.performance.clips[0].character,profile.id);assert.equal(restored.performance.pads.at(-1).action.clip,extended.clip.id);
+ let clock=0;binding.apply(E.emptyFrame());const motion=new E.MotionTake(binding,'Movimiento grabado',profile.id,20,()=>clock);
+ for(let i=1;i<=120;i++){clock=i*1000/6;finger.node.rotation.x=i/200;arm.node.rotation.z=i/300;if(motion.sample())break;}
+ const take=motion.finish();E.poseClipSchema.parse(take);assert.ok(take.keyframes.length<=120);assert.ok(take.duration>19&&take.duration<=20);assert.equal(take.character,profile.id);assert.ok(Object.keys(take.keyframes.at(-1).frame.bones).length>=2);
+ binding.apply(E.sampleClip(take,take.duration));near(finger.node.rotation.x,take.keyframes.at(-1).frame.bones[finger.key].q?new T.Euler().setFromQuaternion(new T.Quaternion().fromArray(take.keyframes.at(-1).frame.bones[finger.key].q)).x:0);
+ const dense={bones:Object.fromEntries(binding.bones.map(b=>[b.key,{p:[1,2,3],q:[.1,.2,.3,Math.sqrt(.86)],s:[1,1,1]}])),morphs:{}};
+ const denseTake={...take,keyframes:Array.from({length:120},(_,i)=>({id:crypto.randomUUID(),time:i/6,frame:structuredClone(dense),easing:'smooth'})),duration:119/6};
+ const fitted=E.appendRecordedTake(p,denseTake),fittedClip=fitted.clips.at(-1);assert.ok(new TextEncoder().encode(JSON.stringify(fitted)).length<=900000);assert.ok(fittedClip.keyframes.length<denseTake.keyframes.length);assert.equal(fittedClip.duration,denseTake.duration);assert.equal(fittedClip.keyframes[0].id,denseTake.keyframes[0].id);assert.equal(fittedClip.keyframes.at(-1).id,denseTake.keyframes.at(-1).id);
+ const brief=new E.MotionTake(binding,'Captura breve',undefined,5,()=>clock);assert.equal(brief.finish().duration,.1,'immediate stop remains a valid animation');
+ const joints=new Map(['spine','leftHand','rightHand','leftFoot','rightFoot'].map(role=>[role,root.getObjectByName({spine:'spine',leftHand:'LeftHand',rightHand:'RightHand',leftFoot:'LeftFoot',rightFoot:'RightFoot'}[role])]));
+ const engine={poseBinding:binding,posePlayer:player,editor:{selected:'',rig:{joints},canIK:()=>true},robot:{available:true},frameCamera:noop};
+ const props={engine,value:p,onChange:noop,onEnabled:noop,onTask:noop,task:'home',enabled:false,autoKey:false,onAutoKey:noop,advanced:false,onAdvanced:noop,onSave:async()=>{},onLive:()=>p,onCaptureLive:()=>p,cameraActive:true,onPad:noop,onActivity:noop,active:true};
+ const home=renderToStaticMarkup(React.createElement(E.CreationStudio,props));for(const label of ['Guardar una pose','Grabar mis movimientos','Animar paso a paso','Tu biblioteca','Mi saludo','Mi intro'])assert.ok(home.includes(label),label);assert.ok(!home.includes('Key whole rig'),'technical timeline stays out of the beginner workflow');
+ const poseUI=renderToStaticMarkup(React.createElement(E.CreationStudio,{...props,task:'pose',enabled:true}));for(const label of ['Guardar pose','Copiar mi postura','Mano izq.','Mano der.','Todos los huesos y ajustes precisos'])assert.ok(poseUI.includes(label),label);assert.ok(!poseUI.includes('Save your cloud scene'));
+ const recordUI=renderToStaticMarkup(React.createElement(E.CreationStudio,{...props,task:'record'}));assert.ok(recordUI.includes('Empezar captura'));assert.ok(recordUI.includes('Duración máxima'));
+ const composer=renderToStaticMarkup(React.createElement(E.PadComposer,{value:p,onChange:noop,onSave:async()=>{},model:binding.model,animations:[],bank:'C',slot:0,onSelect:noop}));assert.ok(composer.includes('Guardar pad'));assert.ok(composer.includes('Añadir powers, gestos y cámara'));assert.ok(composer.includes('guardados aparecen debajo'));
+ const studio=renderToStaticMarkup(React.createElement(E.Studio));for(const label of ['Actuar','Personaje','Crear','Escena','Guardar escena','Grabar video'])assert.ok(studio.includes(label),label);assert.ok(!studio.includes('TIMELINE AVANZADO'),'timeline is closed at startup');
+ console.log(JSON.stringify({verified:true,checks:['save and replay a real customized Robot pose','immutable pose capture','append positions and interpolate arms and fingers','save character dimensions with pose and timeline','one-click pad assignment preserves every existing pad','repeat assignment is idempotent','real PadRuntime replays authored clip','full deck and wrong-rig protection','bounded live take with real arm and finger samples','dense take fits account limit and retains duration and endpoints','immediate stop produces a valid take','three task choices and friendly bone controls','advanced controls collapsed and timeline absent at startup','video and scene actions have distinct labels']}));
+}finally{E.disposeTree(root);await rm(out,{force:true});}
