@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "name": "Highcoon · Classic · Thermal Balance",
+  "mode": "NEUTRAL",
+  "demo": false,
+  "frozen": false,
+  "tracking": {
+    "head": 0.8,
+    "eyes": 1,
+    "blink": 1,
+    "mouth": 1.2,
+    "smile": 1.2,
+    "brows": 1,
+    "handsGain": 1,
+    "wristGain": 1,
+    "fingerGain": 1,
+    "handSmoothing": 0.28,
+    "fingerLimits": true,
+    "body": 1,
+    "smoothing": 0.55,
+    "mirror": true,
+    "hands": true,
+    "pose": true,
+    "rate": 24,
+    "bodyMode": "upper",
+    "arms": 1,
+    "legs": 1,
+    "confidence": 0.55,
+    "groundFeet": true,
+    "overlay": true
+  },
+  "audio": {
+    "gain": 3,
+    "gate": 0.018,
+    "jaw": 0.75,
+    "glow": 0.65,
+    "particles": 0.8
+  },
+  "avatar": {
+    "scale": 1,
+    "y": 0,
+    "yaw": 0,
+    "color": "#fdcc0d",
+    "tint": false,
+    "wireframe": false,
+    "animation": "Idle",
+    "animationSpeed": 1,
+    "hidden": [],
+    "headBone": "auto",
+    "rigMap": {},
+    "character": "highcoon-classic",
+    "motionMode": "hybrid",
+    "animationLoop": true,
+    "animationNonce": 1,
+    "transition": 0.2
+  },
+  "face": {
+    "enabled": true,
+    "speech": 1,
+    "squash": 1,
+    "cheeks": 1,
+    "brows": 1,
+    "blink": 1
+  },
+  "power": {
+    "id": "humulene",
+    "intensity": 1,
+    "reactivity": 1
+  },
+  "world": {
+    "type": "studio",
+    "color": "#071019",
+    "accent": "#f97316",
+    "light": 1.5,
+    "fog": 0.025,
+    "rotation": 0,
+    "scale": 1,
+    "y": 0,
+    "particles": 0.25,
+    "speed": 0.5
+  },
+  "fx": {
+    "bloom": 0.3,
+    "chromatic": 0.001,
+    "pixel": 1,
+    "glitch": 0,
+    "vignette": 0.3,
+    "exposure": 1,
+    "saturation": 1,
+    "grain": 0.015
+  },
+  "output": {
+    "resolution": "1080",
+    "fps": "30",
+    "quality": "balanced"
+  },
+  "camera": {
+    "position": [
+      0,
+      2.45,
+      5.2
+    ],
+    "target": [
+      0,
+      2.12,
+      0
+    ]
+  },
+  "mappings": []
+}

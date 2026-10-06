@@ -1,0 +1,3 @@
+import {handGesture,type HandSide} from "./hands";
+import type {Config,TrackingFrame} from "./state";
+export function puppetHands(c:Config,live:TrackingFrame["hands"],lastHands:number,now:number){const poses=c.puppet;if(poses.left==="none"&&poses.right==="none")return {hands:live,lastHands};const physical=(side:HandSide):HandSide=>c.tracking.mirror?(side==="left"?"right":"left"):side,controlled=new Set((["left","right"] as const).filter(side=>poses[side]!=="none").map(physical)),hands=(now-lastHands<450?live||[]:[]).filter(h=>!controlled.has(h.side.toLowerCase() as HandSide));for(const side of ["left","right"] as const){const pose=poses[side];if(pose!=="none")hands.push({...handGesture(physical(side),pose),locked:true});}return {hands,lastHands:now};}

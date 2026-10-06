@@ -1,0 +1,2 @@
+import {CloudError} from "../cloud-error";
+export async function readRemoteBody(request:Request){if(Number(request.headers.get("content-length"))>150000)throw new CloudError("El mensaje es demasiado grande.",413);const raw=await request.text();if(raw.length>150000)throw new CloudError("El mensaje es demasiado grande.",413);try{return JSON.parse(raw);}catch{throw new CloudError("El mensaje no es válido.");}}
